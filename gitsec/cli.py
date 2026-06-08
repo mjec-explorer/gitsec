@@ -121,7 +121,7 @@ def security_checks(
         raise typer.Exit(code=1)
 
     formats = [f.strip() for f in format.split(",")]
-    valid_formats = ["csv", "xls"]
+    valid_formats = ["csv", "xls", "html"]
     invalid_formats = [f for f in formats if f not in valid_formats]
     if invalid_formats:
         typer.echo(f"Error: Invalid format(s): {', '.join(invalid_formats)}", err=True)
@@ -272,7 +272,7 @@ def scan_dependencies(
         raise typer.Exit(code=1)
 
     formats = [f.strip() for f in format.split(",")]
-    valid_formats = ["csv", "xls"]
+    valid_formats = ["csv", "xls", "html"]
     invalid_formats = [f for f in formats if f not in valid_formats]
     if invalid_formats:
         typer.echo(f"Error: Invalid format(s): {', '.join(invalid_formats)}", err=True)
@@ -439,7 +439,7 @@ def scan_secrets(
         raise typer.Exit(code=1)
 
     formats = [f.strip() for f in format.split(",")]
-    valid_formats = ["csv", "xls"]
+    valid_formats = ["csv", "xls", "html"]
     invalid_formats = [f for f in formats if f not in valid_formats]
     if invalid_formats:
         typer.echo(f"Error: Invalid format(s): {', '.join(invalid_formats)}", err=True)

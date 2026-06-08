@@ -6,7 +6,7 @@ from typing import List
 import typer
 
 from ..models import Finding
-from ..output import ExcelReportWriter, format_security_check_results
+from ..output import ExcelReportWriter, HtmlReportWriter, format_security_check_results
 
 
 def get_token_or_exit(cli_token: str | None) -> str:
@@ -112,4 +112,11 @@ def write_outputs(
         writer.save()
         output_paths.append(str(xls_path))
 
+    if "html" in formats:
+        html_path = output_folder / f"{base_filename}.html"
+        writer = HtmlReportWriter(html_path)
+        writer.add_security_findings(findings)
+        writer.save()
+        output_paths.append(str(html_path))
+    
     return output_paths
