@@ -25,6 +25,7 @@ from .modules.secret_scanning.secrets import (
 )
 from .output import (
     HtmlReportWriter,
+    SarifReportWriter,
     format_dependency_findings,
     format_secret_findings,
 )
@@ -121,7 +122,7 @@ def security_checks(
         raise typer.Exit(code=1)
 
     formats = [f.strip() for f in format.split(",")]
-    valid_formats = ["csv", "html"]
+    valid_formats = ["csv", "html", "sarif"]
     invalid_formats = [f for f in formats if f not in valid_formats]
     if invalid_formats:
         typer.echo(f"Error: Invalid format(s): {', '.join(invalid_formats)}", err=True)
@@ -272,7 +273,7 @@ def scan_dependencies(
         raise typer.Exit(code=1)
 
     formats = [f.strip() for f in format.split(",")]
-    valid_formats = ["csv", "html"]
+    valid_formats = ["csv", "html", "sarif"]
     invalid_formats = [f for f in formats if f not in valid_formats]
     if invalid_formats:
         typer.echo(f"Error: Invalid format(s): {', '.join(invalid_formats)}", err=True)
@@ -392,6 +393,14 @@ def scan_dependencies(
         )
         html_writer.save()
         output_paths.append(str(html_path))
+    if "sarif" in formats:
+        sarif_path = output_dir / f"{base_name}.sarif"
+        sarif_writer = SarifReportWriter(sarif_path)
+        sarif_writer.add_dependency_findings(
+            vuln_findings, deprecated_list, unpinned_list
+        )
+        sarif_writer.save()
+        output_paths.append(str(sarif_path))
 
     typer.echo("\nResults written to:")
     for path in output_paths:
@@ -419,7 +428,7 @@ def scan_secrets(
     ),
     out_folder: str = typer.Option("out", "--out-folder", help="Output folder"),
     format: str = typer.Option(
-        "html", "--format", help="Output format: csv,html, or csv,html for both"
+        "html", "--format", help="Output format: csv, html, sarif or comma-separated formats"
     ),
 ):
     """
@@ -434,7 +443,7 @@ def scan_secrets(
         raise typer.Exit(code=1)
 
     formats = [f.strip() for f in format.split(",")]
-    valid_formats = ["csv", "html"]
+    valid_formats = ["csv", "html", "sarif"]
     invalid_formats = [f for f in formats if f not in valid_formats]
     if invalid_formats:
         typer.echo(f"Error: Invalid format(s): {', '.join(invalid_formats)}", err=True)
@@ -491,6 +500,13 @@ def scan_secrets(
             writer.add_secret_findings(secret_findings)
             writer.save()
             output_paths.append(str(html_path))
+        
+        if "sarif" in formats:
+            sarif_path = output_dir / f"{base_name}.sarif"
+            sarif_writer = SarifReportWriter(sarif_path)
+            sarif_writer.add_secret_findings(secret_findings)
+            sarif_writer.save()
+            output_paths.append(str(sarif_path))
 
         typer.echo("\nResults written to:")
         for path in output_paths:
@@ -520,6 +536,9 @@ def audit_all(
         help="GitHub token (required for remote scanning)",
     ),
     out_folder: str = typer.Option("out", "--out-folder", help="Output folder"),
+    format: str = typer.Option(
+        "html", "--format", help="Output format: html, sarif, or html,sarif for both"
+    ),
     max_repos: int = typer.Option(
         100,
         help="Maximum repositories for secret/dependency scanning (0 for unlimited). Repos sorted by recent activity.",
@@ -555,6 +574,14 @@ def audit_all(
 
     output_dir = Path(out_folder)
     output_dir.mkdir(parents=True, exist_ok=True)
+
+    formats = [f.strip() for f in format.split(",")]
+    valid_formats = ["html", "sarif"]
+    invalid_formats = [f for f in formats if f not in valid_formats]
+    if invalid_formats:
+        typer.echo(f"Error: Invalid format(s): {', '.join(invalid_formats)}", err=True)
+        typer.echo(f"Valid formats: {', '.join(valid_formats)}", err=True)
+        raise typer.Exit(code=1)
 
     module_progress = {
         "secrets": "Starting...",
@@ -956,23 +983,50 @@ def audit_all(
     typer.echo("Generating comprehensive report...")
     typer.echo("=" * 60)
 
-    html_path = output_dir / f"audit_all_{target_name}.html"
-    writer = HtmlReportWriter(html_path)
+    output_paths = []
 
     actual_security_findings = [f for f in security_findings if not f.is_error]
     security_check_errors = [f for f in security_findings if f.is_error]
 
-    if actual_security_findings:
-        writer.add_security_findings(actual_security_findings)
+    if "html" in formats:
+        html_path = output_dir / f"audit_all_{target_name}.html"
+        writer = HtmlReportWriter(html_path)
 
-    if dependency_vulnerabilities or deprecated_packages or unpinned_dependencies:
-        writer.add_dependency_findings(
-            dependency_vulnerabilities, deprecated_packages, unpinned_dependencies
-        )
+        if actual_security_findings:
+            writer.add_security_findings(actual_security_findings)
 
-    if secret_findings:
-        writer.add_secret_findings(secret_findings)
-    writer.save()
+        if dependency_vulnerabilities or deprecated_packages or unpinned_dependencies:
+            writer.add_dependency_findings(
+                dependency_vulnerabilities,
+                deprecated_packages,
+                unpinned_dependencies,
+            )
+
+        if secret_findings:
+            writer.add_secret_findings(secret_findings)
+
+        writer.save()
+        output_paths.append(str(html_path))
+
+    if "sarif" in formats:
+        sarif_path = output_dir / f"audit_all_{target_name}.sarif"
+        sarif_writer = SarifReportWriter(sarif_path)
+
+        if actual_security_findings:
+            sarif_writer.add_security_findings(actual_security_findings)
+
+        if dependency_vulnerabilities or deprecated_packages or unpinned_dependencies:
+            sarif_writer.add_dependency_findings(
+                dependency_vulnerabilities,
+                deprecated_packages,
+                unpinned_dependencies,
+            )
+
+        if secret_findings:
+            sarif_writer.add_secret_findings(secret_findings)
+
+        sarif_writer.save()
+        output_paths.append(str(sarif_path))
 
     typer.echo("\n" + "=" * 60)
     typer.echo("AUDIT SUMMARY")
@@ -1054,7 +1108,9 @@ def audit_all(
 
         typer.echo("\n" + "=" * 60)
 
-    typer.echo(f"\n✓ Comprehensive report written to: {html_path}")
+    typer.echo("\n✓ Comprehensive report written to:")
+    for path in output_paths:
+        typer.echo(f"  - {path}")
     typer.echo("=" * 60 + "\n")
 
 

@@ -6,7 +6,7 @@ from typing import List
 import typer
 
 from ..models import Finding
-from ..output import HtmlReportWriter, format_security_check_results
+from ..output import HtmlReportWriter, SarifReportWriter, format_security_check_results
 
 
 def get_token_or_exit(cli_token: str | None) -> str:
@@ -103,5 +103,12 @@ def write_outputs(
         writer.add_security_findings(findings)
         writer.save()
         output_paths.append(str(html_path))
+    
+    if "sarif" in formats:
+        sarif_path = output_folder / f"{base_filename}.sarif"
+        writer = SarifReportWriter(sarif_path)
+        writer.add_security_findings(findings)
+        writer.save()
+        output_paths.append(str(sarif_path))
     
     return output_paths
